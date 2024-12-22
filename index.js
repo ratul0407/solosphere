@@ -26,7 +26,7 @@ async function run() {
   try {
     const db = client.db("SoloSphereDB");
     const jobsCollection = db.collection("jobs");
-
+    const bidsCollection = db.collection("bids");
     app.post("/add-job", async (req, res) => {
       const jobData = req.body;
       const result = await jobsCollection.insertOne(jobData);
@@ -57,7 +57,7 @@ async function run() {
     //get jobs data based on id
     app.get("/job/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id);
+
       const query = { _id: new ObjectId(id) };
       const result = await jobsCollection.findOne(query);
       res.send(result);
@@ -75,6 +75,38 @@ async function run() {
       const result = await jobsCollection.updateOne(query, updated, options);
       res.send(result);
     });
+
+    //save a bid to the database
+    app.post("/add-bid", async (req, res) => {
+      const bidData = req.body;
+      //0. check if the user has already placed a bid on this job
+      const query = { email: bidData.email, jobId: bidData.jobId };
+      const alreayExist = await bidsCollection.findOne(query);
+      if (alreayExist) {
+        return res
+          .status(400)
+          .send("you have already placed a bid on this job");
+      }
+      // 1. save data in bids collection
+      const result = await bidsCollection.insertOne(bidData);
+
+      // 2. update bid count in jobs collection
+      const filter = { _id: new ObjectId(bidData.jobId) };
+      const update = {
+        $inc: { bid_count: 1 },
+      };
+      const updateBidCounter = await jobsCollection.updateOne(filter, update);
+      res.send(result);
+    });
+
+    // get all bids for a specific user
+    app.get("/bids/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const result = await bidsCollection.find(query).toArray();
+      res.send(result);
+    });
+
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // Send a ping to confirm a successful connection
